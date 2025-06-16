@@ -3,7 +3,7 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
-from models import db, User, Role, Equipment, Category, MaintenanceHistory, ResponsiblePersons, WriteOff, Photo
+from .models import db, User, Role, Equipment, Category, MaintenanceHistory, ResponsiblePersons, WriteOff, Photo
 import os
 import hashlib
 from werkzeug.utils import secure_filename
@@ -199,13 +199,6 @@ def seed_test_data():
         db.session.add(write_off)
     db.session.commit()
 
-# Добавляем команду для заполнения тестовыми данными
-@app.cli.command('seed-test-data')
-def seed_test_data_command():
-    """Fill the database with test data."""
-    seed_test_data()
-    print('Test data has been added to the database.')
-
 with app.app_context():
     db.drop_all()
     db.create_all()
@@ -321,46 +314,40 @@ def view_equipment(id):
     equipment = Equipment.query.get_or_404(id)
     return render_template('view_equipment.html', equipment=equipment)
 
-@app.route('/equipment/<int:id>/edit', methods=['GET', 'POST'])
-@login_required
-def edit_equipment(id):
-    if not current_user.role.name == 'admin':
-        flash('У вас недостаточно прав для выполнения данного действия', 'danger')
-        return redirect(url_for('index'))
-
-    equipment = Equipment.query.get_or_404(id)
+def handle_equipment_form(equipment=None):
+    """Общая функция для обработки формы добавления/редактирования оборудования"""
     categories = Category.query.all()
-
+    responsible_persons = ResponsiblePersons.query.all()
+    
     if request.method == 'POST':
         form_data = {
             'name': request.form.get('name', '').strip(),
             'inventory_number': request.form.get('inventory_number', '').strip(),
-            'category_id': request.form.get('category_id'),
-            'purchase_date': request.form.get('purchase_date'),
-            'cost': request.form.get('cost'),
-            'status': request.form.get('status'),
-            'note': request.form.get('note', '').strip()
+            'category_id': request.form.get('category_id', '').strip(),
+            'purchase_date': request.form.get('purchase_date', '').strip(),
+            'cost': request.form.get('cost', '').strip(),
+            'status': request.form.get('status', '').strip(),
+            'note': request.form.get('note', '').strip(),
+            'responsible_persons': request.form.getlist('responsible_persons')
         }
-
+        
         errors = {}
-
+        
+        # Валидация полей
         if not form_data['name']:
             errors['name'] = 'Название обязательно'
-        
+            
         if not form_data['inventory_number']:
             errors['inventory_number'] = 'Инвентарный номер обязателен'
         else:
-            # Проверка уникальности инвентарного номера
-            existing = Equipment.query.filter(
-                Equipment.inventory_number == form_data['inventory_number'],
-                Equipment.id != id
-            ).first()
-            if existing:
-                errors['inventory_number'] = 'Инвентарный номер уже используется'
-
+            # Проверяем уникальность инвентарного номера
+            existing = Equipment.query.filter_by(inventory_number=form_data['inventory_number']).first()
+            if existing and (not equipment or existing.id != equipment.id):
+                errors['inventory_number'] = 'Оборудование с таким инвентарным номером уже существует'
+        
         if not form_data['category_id']:
             errors['category_id'] = 'Выберите категорию'
-
+        
         if not form_data['purchase_date']:
             errors['purchase_date'] = 'Дата покупки обязательна'
         else:
@@ -368,7 +355,7 @@ def edit_equipment(id):
                 purchase_date = datetime.strptime(form_data['purchase_date'], '%Y-%m-%d').date()
             except ValueError:
                 errors['purchase_date'] = 'Неверный формат даты'
-
+        
         if not form_data['cost']:
             errors['cost'] = 'Стоимость обязательна'
         else:
@@ -378,16 +365,32 @@ def edit_equipment(id):
                     errors['cost'] = 'Стоимость не может быть отрицательной'
             except ValueError:
                 errors['cost'] = 'Неверный формат стоимости'
-
+        
         if not form_data['status']:
             errors['status'] = 'Выберите статус'
-
+        
         # Обработка фотографии
         photo = request.files.get('photo')
         if photo and photo.filename:
-            if not allowed_file(photo.filename):
+            if not photo.filename.lower().endswith(('.png', '.jpg', '.jpeg')):
                 errors['photo'] = 'Недопустимый формат файла'
             else:
+                # Проверка MD5-хэша
+                md5_hash = calculate_md5(photo)
+                existing_photo = Photo.query.filter_by(md5_hash=md5_hash).first()
+                if existing_photo:
+                    errors['photo'] = 'Такая фотография уже существует в базе'
+        
+        if errors:
+            return render_template('equipment_form.html',
+                                equipment=equipment,
+                                categories=categories,
+                                responsible_persons=responsible_persons,
+                                form_data=form_data,
+                                errors=errors)
+        
+        try:
+            if equipment:  # Редактирование
                 # Удаляем старые фотографии оборудования
                 for old_photo in equipment.photos:
                     try:
@@ -398,77 +401,99 @@ def edit_equipment(id):
                     except Exception as e:
                         db.session.rollback()
                         flash(f'Ошибка при удалении старой фотографии: {str(e)}', 'warning')
-
-                # Проверка MD5-хэша новой фотографии
-                md5_hash = calculate_md5(photo)
-                existing_photo = Photo.query.filter_by(md5_hash=md5_hash).first()
                 
-                if existing_photo:
-                    # Проверяем, не используется ли фото другим оборудованием
-                    other_equipment = Equipment.query.join(Equipment.photos).filter(
-                        Photo.id == existing_photo.id,
-                        Equipment.id != id
-                    ).first()
-                    
-                    if other_equipment:
-                        errors['photo'] = 'Это фото уже используется другим оборудованием'
-                    else:
-                        # Используем существующую фотографию
-                        equipment.photos = [existing_photo]
-                else:
-                    # Сохраняем новую фотографию
-                    filename = secure_filename(photo.filename)
-                    photo_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    
-                    # Проверяем, не существует ли файл с таким именем
-                    if os.path.exists(photo_path):
-                        base, ext = os.path.splitext(filename)
-                        filename = f"{base}_{int(datetime.now().timestamp())}{ext}"
-                        photo_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    
-                    photo.save(photo_path)
-                    
-                    new_photo = Photo(
-                        filename=filename,
-                        mime_type=photo.content_type,
-                        md5_hash=md5_hash,
-                        equipment_id=equipment.id
-                    )
-                    db.session.add(new_photo)
-
-        if errors:
-            return render_template('edit_equipment.html',
-                                equipment=equipment,
-                                categories=categories,
-                                form_data=form_data,
-                                errors=errors)
-
-        try:
-            # Обновление данных оборудования
-            equipment.name = form_data['name']
-            equipment.inventory_number = form_data['inventory_number']
-            equipment.category_id = int(form_data['category_id'])
-            equipment.purchase_date = datetime.strptime(form_data['purchase_date'], '%Y-%m-%d').date()
-            equipment.cost = float(form_data['cost'])
-            equipment.status = form_data['status']
-            equipment.note = form_data['note']
-
+                equipment.name = form_data['name']
+                equipment.inventory_number = form_data['inventory_number']
+                equipment.category_id = int(form_data['category_id'])
+                equipment.purchase_date = datetime.strptime(form_data['purchase_date'], '%Y-%m-%d').date()
+                equipment.cost = float(form_data['cost'])
+                equipment.status = form_data['status']
+                equipment.note = form_data['note']
+                
+                # Обновляем ответственных лиц
+                equipment.responsible_persons = []
+                for person_id in form_data['responsible_persons']:
+                    person = ResponsiblePersons.query.get(int(person_id))
+                    if person:
+                        equipment.responsible_persons.append(person)
+                
+                flash('Оборудование успешно обновлено', 'success')
+            else:  # Добавление
+                equipment = Equipment(
+                    name=form_data['name'],
+                    inventory_number=form_data['inventory_number'],
+                    category_id=int(form_data['category_id']),
+                    purchase_date=datetime.strptime(form_data['purchase_date'], '%Y-%m-%d').date(),
+                    cost=float(form_data['cost']),
+                    status=form_data['status'],
+                    note=form_data['note']
+                )
+                
+                # Добавляем ответственных лиц
+                for person_id in form_data['responsible_persons']:
+                    person = ResponsiblePersons.query.get(int(person_id))
+                    if person:
+                        equipment.responsible_persons.append(person)
+                
+                db.session.add(equipment)
+                flash('Оборудование успешно добавлено', 'success')
+            
+            # Обработка новой фотографии
+            if photo and photo.filename:
+                filename = secure_filename(photo.filename)
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                
+                # Проверяем, не существует ли файл с таким именем
+                if os.path.exists(filepath):
+                    base, ext = os.path.splitext(filename)
+                    filename = f"{base}_{int(datetime.now().timestamp())}{ext}"
+                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                
+                photo.save(filepath)
+                
+                new_photo = Photo(
+                    filename=filename,
+                    mime_type=photo.content_type,
+                    md5_hash=md5_hash,
+                    equipment=equipment
+                )
+                db.session.add(new_photo)
+            
             db.session.commit()
-            flash('Оборудование успешно обновлено', 'success')
             return redirect(url_for('view_equipment', id=equipment.id))
-
+            
         except Exception as e:
             db.session.rollback()
             flash(f'Ошибка при сохранении данных: {str(e)}', 'danger')
-            return render_template('edit_equipment.html',
+            return render_template('equipment_form.html',
                                 equipment=equipment,
                                 categories=categories,
+                                responsible_persons=responsible_persons,
                                 form_data=form_data,
                                 errors={})
-
-    return render_template('edit_equipment.html',
+    
+    return render_template('equipment_form.html',
                          equipment=equipment,
-                         categories=categories)
+                         categories=categories,
+                         responsible_persons=responsible_persons)
+
+@app.route('/equipment/add', methods=['GET', 'POST'])
+@login_required
+def add_equipment():
+    if not current_user.role.name == 'admin':
+        flash('У вас недостаточно прав для выполнения данного действия', 'danger')
+        return redirect(url_for('index'))
+    return handle_equipment_form()
+
+@app.route('/equipment/<int:id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_equipment(id):
+    if not current_user.role.name == 'admin':
+        flash('У вас недостаточно прав для выполнения данного действия', 'danger')
+        return redirect(url_for('index'))
+    
+    equipment = Equipment.query.get_or_404(id)
+    return handle_equipment_form(equipment)
 
 @app.route('/equipment/<int:id>/delete', methods=['POST'])
 @login_required
@@ -557,7 +582,7 @@ def add_maintenance(id):
 @app.route('/maintenance', methods=['GET'])
 @login_required
 def maintenance():
-    if current_user.role.name != 'tech':
+    if current_user.role.name not in ['tech', 'admin']:
         flash('У вас нет прав для добавления записей об обслуживании', 'danger')
         return redirect(url_for('index'))
     

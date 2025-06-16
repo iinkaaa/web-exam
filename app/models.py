@@ -79,3 +79,11 @@ class WriteOff(db.Model):
     act_filename = db.Column(db.String(100))
     act_mime_type = db.Column(db.String(100))
     act_md5_hash = db.Column(db.String(32))
+
+    def act_file_exists(self):
+        if not self.act_filename:
+            return False
+        from flask import current_app
+        import os
+        file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], self.act_filename)
+        return os.path.exists(file_path)

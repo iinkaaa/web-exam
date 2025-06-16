@@ -118,8 +118,13 @@
         {% else %}
         <tr><td colspan="5">Нет оборудования</td></tr>        
         {% endfor %}
+        
     </tbody>
+
 </table>
+{% if current_user.is_authenticated and current_user.role.name == 'admin' %}
+        <a class="btn btn-info" href="{{ url_for('add_equipment') }}">Добавить оборудование</a>
+{% endif %}
 
 <div class="pagination-container mt-4">
     {% if pagination.pages > 1 %}
