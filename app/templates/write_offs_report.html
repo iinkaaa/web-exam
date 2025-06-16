@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Отчёт по списанному оборудованию</h2>
+
+<div class="mb-4">
+    <!--<a href="{{ url_for('export_write_offs_report', export='pdf', date_from=date_from, date_to=date_to) }}" 
+       class="btn btn-primary">Экспорт в PDF</a>-->
+    <a href="{{ url_for('export_write_offs_report', export='excel', date_from=date_from, date_to=date_to) }}" 
+       class="btn btn-success ms-2">Экспорт в Excel</a>
+</div>
+
+<table class="table table-bordered">
+    <thead class="table-dark">
+        <tr>
+            <th>Дата списания</th>
+            <th>Наименование</th>
+            <th>Инв. номер</th>
+            <th>Категория</th>
+            <th>Дата приобретения</th>
+            <th>Стоимость</th>
+            <th>Причина списания</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for wo in write_offs %}
+        <tr>
+            <td>{{ wo.write_off_date.strftime('%d.%m.%Y') }}</td>
+            <td>{{ wo.equipment_obj.name }}</td>
+            <td>{{ wo.equipment_obj.inventory_number }}</td>
+            <td>{{ wo.equipment_obj.category.name }}</td>
+            <td>{{ wo.equipment_obj.purchase_date.strftime('%d.%m.%Y') }}</td>
+            <td>{{ "%.2f"|format(wo.equipment_obj.cost) }} руб.</td>
+            <td>{{ wo.reason }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

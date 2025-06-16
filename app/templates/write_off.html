@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Списание оборудования</h2>
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title">{{ equipment.name }}</h5>
+        <p class="card-text">
+            Инвентарный номер: {{ equipment.inventory_number }}<br>
+            Категория: {{ equipment.category.name }}<br>
+            Дата приобретения: {{ equipment.purchase_date.strftime('%d.%m.%Y') }}<br>
+            Стоимость: {{ "%.2f"|format(equipment.cost) }} руб.
+        </p>
+    </div>
+</div>
+
+<form method="POST" enctype="multipart/form-data">
+    
+    <div class="form-group mt-3">
+        <label for="reason">Причина списания</label>
+        <textarea class="form-control {% if errors.reason %}is-invalid{% endif %}" 
+                  id="reason" name="reason" rows="3" required>{{ reason }}</textarea>
+        {% if errors.reason %}
+        <div class="invalid-feedback">{{ errors.reason }}</div>
+        {% endif %}
+    </div>
+    
+    <div class="form-group mt-3">
+        <label for="act_file">Акт списания (PDF)</label>
+        <input type="file" class="form-control-file {% if errors.act_file %}is-invalid{% endif %}" 
+               id="act_file" name="act_file" accept=".pdf" required>
+        {% if errors.act_file %}
+        <div class="invalid-feedback">{{ errors.act_file }}</div>
+        {% endif %}
+    </div>
+    
+    <button type="submit" class="btn btn-danger mt-3">Списать оборудование</button>
+    <a href="{{ url_for('view_equipment', id=equipment.id) }}" class="btn btn-secondary mt-3">Отмена</a>
+</form>
+{% endblock %}

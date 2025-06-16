@@ -7,6 +7,11 @@ from models import db, User, Role, Equipment, Category, MaintenanceHistory, Resp
 import os
 import hashlib
 from werkzeug.utils import secure_filename
+from flask import send_from_directory
+from werkzeug.utils import secure_filename
+from flask import make_response
+from io import BytesIO
+import openpyxl
 
 app = Flask(__name__)
 application = app
@@ -114,43 +119,92 @@ def seed_test_data():
         db.session.add_all([admin, tech, user])
         db.session.commit()
 
-    if not Category.query.first():
-        cat1 = Category(name='Компьютеры', description='Компьютерная техника')
-        cat2 = Category(name='Принтеры', description='Печатающие устройства')
-        cat3 = Category(name='Сканеры', description='Сканирующие устройства')
-        db.session.add_all([cat1, cat2, cat3])
-        db.session.commit()
-    if not Equipment.query.first():
-        eq1 = Equipment(
-            name='Lenovo ThinkCentre',
-            inventory_number='INV-001',
-            category_id=Category.query.filter_by(name='Компьютеры').first().id,
-            purchase_date=datetime(2022, 5, 10),
-            cost=45000,
-            status='В эксплуатации',
-            note='Рабочая станция бухгалтера'
-        )
-        eq2 = Equipment(
-            name='HP LaserJet 1020',
-            inventory_number='INV-002',
-            category_id=Category.query.filter_by(name='Принтеры').first().id,
-            purchase_date=datetime(2021, 3, 15),
-            cost=12000,
-            status='На ремонте',
-            note='Требуется замена картриджа'
-        )
-        eq3 = Equipment(
-            name='Canon CanoScan LiDE 300',
-            inventory_number='INV-003',
-            category_id=Category.query.filter_by(name='Сканеры').first().id,
-            purchase_date=datetime(2020, 8, 20),
-            cost=7000,
-            status='Списано',
-            note='Не включается'
-        )
-        db.session.add_all([eq1, eq2, eq3])
-        db.session.commit()
-        
+    # Создаем категории
+    categories = [
+        Category(name='Компьютеры', description='Персональные компьютеры и ноутбуки'),
+        Category(name='Принтеры', description='Принтеры и МФУ'),
+        Category(name='Сетевое оборудование', description='Маршрутизаторы, коммутаторы'),
+        Category(name='Мебель', description='Офисная мебель'),
+        Category(name='Телефоны', description='Стационарные телефоны')
+    ]
+    
+    for category in categories:
+        db.session.add(category)
+    db.session.commit()
+    
+    # Создаем ответственных лиц
+    responsible_persons = [
+        ResponsiblePersons(full_name='Иванов Иван Иванович', position='Системный администратор', contact_details='ivanov@example.com'),
+        ResponsiblePersons(full_name='Петров Петр Петрович', position='Начальник IT-отдела', contact_details='petrov@example.com'),
+        ResponsiblePersons(full_name='Сидорова Анна Сергеевна', position='Бухгалтер', contact_details='sidorova@example.com')
+    ]
+    
+    for person in responsible_persons:
+        db.session.add(person)
+    db.session.commit()
+    
+    # Создаем оборудование
+    equipment_list = [
+        Equipment(name='Ноутбук Dell XPS 13', inventory_number='PC001', category_id=1, 
+                 purchase_date=datetime(2022, 1, 15).date(), cost=85000, status='В эксплуатации'),
+        Equipment(name='Принтер HP LaserJet Pro', inventory_number='PR001', category_id=2,
+                 purchase_date=datetime(2022, 2, 20).date(), cost=25000, status='В эксплуатации'),
+        Equipment(name='Маршрутизатор Cisco', inventory_number='NET001', category_id=3,
+                 purchase_date=datetime(2022, 3, 10).date(), cost=15000, status='В эксплуатации'),
+        Equipment(name='Офисный стол', inventory_number='FUR001', category_id=4,
+                 purchase_date=datetime(2022, 4, 5).date(), cost=12000, status='В эксплуатации'),
+        Equipment(name='Телефон Panasonic', inventory_number='PH001', category_id=5,
+                 purchase_date=datetime(2022, 5, 12).date(), cost=5000, status='В эксплуатации'),
+        Equipment(name='Ноутбук Lenovo ThinkPad', inventory_number='PC002', category_id=1,
+                 purchase_date=datetime(2022, 6, 18).date(), cost=75000, status='В эксплуатации'),
+        Equipment(name='МФУ Canon', inventory_number='PR002', category_id=2,
+                 purchase_date=datetime(2022, 7, 22).date(), cost=35000, status='В эксплуатации'),
+        Equipment(name='Коммутатор TP-Link', inventory_number='NET002', category_id=3,
+                 purchase_date=datetime(2022, 8, 30).date(), cost=8000, status='В эксплуатации'),
+        Equipment(name='Офисное кресло', inventory_number='FUR002', category_id=4,
+                 purchase_date=datetime(2022, 9, 15).date(), cost=15000, status='В эксплуатации'),
+        Equipment(name='Телефон Siemens', inventory_number='PH002', category_id=5,
+                 purchase_date=datetime(2022, 10, 20).date(), cost=4500, status='В эксплуатации'),
+        Equipment(name='Старый принтер HP', inventory_number='PR003', category_id=2,
+                 purchase_date=datetime(2020, 1, 10).date(), cost=20000, status='Списано'),
+        Equipment(name='Сломанный ноутбук', inventory_number='PC003', category_id=1,
+                 purchase_date=datetime(2020, 3, 15).date(), cost=60000, status='Списано'),
+        Equipment(name='Устаревший маршрутизатор', inventory_number='NET003', category_id=3,
+                 purchase_date=datetime(2020, 5, 20).date(), cost=10000, status='Списано'),
+        Equipment(name='Сломанный стол', inventory_number='FUR003', category_id=4,
+                 purchase_date=datetime(2020, 7, 25).date(), cost=8000, status='Списано'),
+        Equipment(name='Неисправный телефон', inventory_number='PH003', category_id=5,
+                 purchase_date=datetime(2020, 9, 30).date(), cost=3000, status='Списано')
+    ]
+    
+    for equipment in equipment_list:
+        db.session.add(equipment)
+    db.session.commit()
+    
+    # Создаем записи о списании
+    write_offs = [
+        WriteOff(equipment_id=11, write_off_date=datetime(2023, 1, 15).date(),
+                reason='Морально устарел, не подлежит ремонту'),
+        WriteOff(equipment_id=12, write_off_date=datetime(2023, 2, 20).date(),
+                reason='Критическая неисправность материнской платы'),
+        WriteOff(equipment_id=13, write_off_date=datetime(2023, 3, 10).date(),
+                reason='Устаревшая модель, не поддерживает современные стандарты'),
+        WriteOff(equipment_id=14, write_off_date=datetime(2023, 4, 5).date(),
+                reason='Механические повреждения, не подлежит восстановлению'),
+        WriteOff(equipment_id=15, write_off_date=datetime(2023, 5, 12).date(),
+                reason='Неисправность электроники, ремонт экономически нецелесообразен')
+    ]
+    
+    for write_off in write_offs:
+        db.session.add(write_off)
+    db.session.commit()
+
+# Добавляем команду для заполнения тестовыми данными
+@app.cli.command('seed-test-data')
+def seed_test_data_command():
+    """Fill the database with test data."""
+    seed_test_data()
+    print('Test data has been added to the database.')
 
 with app.app_context():
     db.drop_all()
@@ -334,7 +388,18 @@ def edit_equipment(id):
             if not allowed_file(photo.filename):
                 errors['photo'] = 'Недопустимый формат файла'
             else:
-                # Проверка MD5-хэша
+                # Удаляем старые фотографии оборудования
+                for old_photo in equipment.photos:
+                    try:
+                        old_filepath = os.path.join(app.config['UPLOAD_FOLDER'], old_photo.filename)
+                        if os.path.exists(old_filepath):
+                            os.remove(old_filepath)
+                        db.session.delete(old_photo)
+                    except Exception as e:
+                        db.session.rollback()
+                        flash(f'Ошибка при удалении старой фотографии: {str(e)}', 'warning')
+
+                # Проверка MD5-хэша новой фотографии
                 md5_hash = calculate_md5(photo)
                 existing_photo = Photo.query.filter_by(md5_hash=md5_hash).first()
                 
@@ -504,21 +569,253 @@ def maintenance():
                          equipment_list=equipment_list,
                          equipment=equipment)
 
+@app.route('/equipment/<int:id>/write_off', methods=['GET', 'POST'])
+@login_required
+def write_off_equipment(id):
+    if not current_user.role.name == 'admin':
+        flash('У вас недостаточно прав для выполнения данного действия', 'danger')
+        return redirect(url_for('index'))
 
-
-# app.register_blueprint(reports_bp)
-
-# @app.before_request
-# def log_visit():
-#     if request.path.startswith('/static/'):
-#         return
+    equipment = Equipment.query.get_or_404(id)
     
-#     visit = VisitLog(
-#         path=request.path,
-#         user_id=current_user.id if current_user.is_authenticated else None
-#     )
-#     db.session.add(visit)
-#     db.session.commit()
+    if request.method == 'POST':
+        reason = request.form.get('reason', '').strip()
+        act_file = request.files.get('act_file')
+        
+        errors = {}
+        
+        if not reason:
+            errors['reason'] = 'Укажите причину списания'
+        
+        if not act_file or not act_file.filename:
+            errors['act_file'] = 'Загрузите акт списания'
+        elif not act_file.filename.lower().endswith('.pdf'):
+            errors['act_file'] = 'Акт списания должен быть в формате PDF'
+        
+        if errors:
+            return render_template('write_off.html', 
+                                equipment=equipment,
+                                reason=reason,
+                                errors=errors)
+        
+        try:
+            filename = f"writeoff_{equipment.id}_{datetime.now().timestamp()}.pdf"
+            filename = secure_filename(filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            
+            act_file.save(filepath)
+            
+            md5_hash = calculate_md5(open(filepath, 'rb'))
+            
+            write_off = WriteOff(
+                equipment_id=equipment.id,
+                reason=reason,
+                write_off_date=datetime.utcnow().date(),
+                act_filename=filename,
+                act_mime_type=act_file.content_type,
+                act_md5_hash=md5_hash
+            )
+            
+            equipment.status = 'Списано'
+            
+            db.session.add(write_off)
+            db.session.commit()
+            
+            flash('Оборудование успешно списано', 'success')
+            return redirect(url_for('view_equipment', id=equipment.id))
+            
+        except Exception as e:
+            db.session.rollback()
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            flash(f'Ошибка при списании оборудования: {str(e)}', 'danger')
+    
+    return render_template('write_off.html', 
+                         equipment=equipment,
+                         errors={},
+                         reason='')
+
+@app.route('/write_offs')
+@login_required
+def write_offs_list():
+    page = request.args.get('page', 1, type=int)
+    date_from = request.args.get('date_from')
+    date_to = request.args.get('date_to')
+    
+    query = WriteOff.query.join(Equipment).order_by(WriteOff.write_off_date.desc())
+    
+    if date_from:
+        try:
+            date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
+            query = query.filter(WriteOff.write_off_date >= date_from_obj)
+        except ValueError:
+            pass
+    
+    if date_to:
+        try:
+            date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
+            query = query.filter(WriteOff.write_off_date <= date_to_obj)
+        except ValueError:
+            pass
+    
+    pagination = query.paginate(page=page, per_page=10, error_out=False)
+    
+    return render_template('write_offs_list.html',
+                         write_offs=pagination.items,
+                         pagination=pagination)
+
+@app.route('/write_offs/report')
+@login_required
+def write_offs_report():
+    date_from = request.args.get('date_from')
+    date_to = request.args.get('date_to')
+    
+    query = WriteOff.query.join(Equipment).order_by(WriteOff.write_off_date.desc())
+    
+    if date_from:
+        try:
+            date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
+            query = query.filter(WriteOff.write_off_date >= date_from_obj)
+        except ValueError:
+            pass
+    
+    if date_to:
+        try:
+            date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
+            query = query.filter(WriteOff.write_off_date <= date_to_obj)
+        except ValueError:
+            pass
+    
+    write_offs = query.all()
+    
+    return render_template('write_offs_report.html',
+                         write_offs=write_offs)
+
+
+@app.route('/write_offs/download_act/<int:write_off_id>')
+@login_required
+def download_write_off_act(write_off_id):
+    write_off = WriteOff.query.get_or_404(write_off_id)
+    
+    # Полный путь к файлу
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], write_off.act_filename)
+    
+    # Проверяем существование файла
+    if not os.path.exists(file_path):
+        flash('Файл акта не найден на сервере', 'warning')
+        return redirect(url_for('write_offs_list'))
+    
+    try:
+        return send_from_directory(
+            directory=app.config['UPLOAD_FOLDER'],
+            path=write_off.act_filename,
+            as_attachment=True,
+            download_name=f"act_spisanie_{write_off.equipment_obj.inventory_number}.pdf",
+            mimetype='application/pdf'
+        )
+    except Exception as e:
+        flash(f'Ошибка при загрузке файла: {str(e)}', 'danger')
+        return redirect(url_for('write_offs_list'))
+
+@app.route('/write_offs/report/export')
+@login_required
+def export_write_offs_report():
+    export_type = request.args.get('export', 'pdf')
+    date_from = request.args.get('date_from')
+    date_to = request.args.get('date_to')
+
+    query = WriteOff.query.join(Equipment).order_by(WriteOff.write_off_date.desc())
+
+    # Фильтрация по датам
+    if date_from:
+        try:
+            date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
+            query = query.filter(WriteOff.write_off_date >= date_from_obj)
+        except ValueError:
+            pass
+
+    if date_to:
+        try:
+            date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
+            query = query.filter(WriteOff.write_off_date <= date_to_obj)
+        except ValueError:
+            pass
+
+    write_offs = query.all()
+
+    # if export_type == 'pdf':
+    #     return generate_pdf_report(write_offs)
+    if export_type == 'excel':
+        return generate_excel_report(write_offs)
+    else:
+        flash('Неподдерживаемый формат экспорта', 'danger')
+        return redirect(url_for('write_offs_report'))
+    
+# from reportlab.pdfgen import canvas
+
+# def generate_pdf_report(write_offs):
+#     buffer = BytesIO()
+#     p = canvas.Canvas(buffer)
+    
+#     # Заголовок отчета
+#     p.setFont("Helvetica-Bold", 16)
+#     p.drawString(100, 800, "Write-off report")
+#     p.setFont("Helvetica", 12)
+    
+#     # Заголовки таблицы
+#     p.drawString(50, 770, "Write off date")
+#     p.drawString(150, 770, "Equipment")
+#     p.drawString(300, 770, "Inventory number")
+#     p.drawString(400, 770, "Reason")
+    
+#     # Данные
+#     y = 750
+#     for wo in write_offs:
+#         p.drawString(50, y, wo.write_off_date.strftime('%d.%m.%Y'))
+#         p.drawString(150, y, wo.equipment_obj.name)
+#         p.drawString(300, y, wo.equipment_obj.inventory_number)
+#         p.drawString(400, y, wo.reason[:50] + '...' if len(wo.reason) > 50 else wo.reason)
+#         y -= 20
+#         if y < 50:
+#             p.showPage()
+#             y = 800
+    
+#     p.save()
+#     buffer.seek(0)
+    
+#     response = make_response(buffer.getvalue())
+#     response.headers['Content-Type'] = 'application/pdf'
+#     response.headers['Content-Disposition'] = 'attachment; filename=write_offs_report.pdf'
+#     return response
+
+def generate_excel_report(write_offs):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Списанное оборудование"
+    
+    # Заголовки
+    ws.append(["Дата списания", "Оборудование", "Инв. номер", "Причина"])
+    
+    for wo in write_offs:
+        ws.append([
+            wo.write_off_date.strftime('%d.%m.%Y'),
+            wo.equipment_obj.name,
+            wo.equipment_obj.inventory_number,
+            wo.reason
+        ])
+    
+    # Настройка ширины столбцов
+    for column in ['A', 'B', 'C', 'D']:
+        ws.column_dimensions[column].width = 25
+    
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    
+    response = make_response(buffer.getvalue())
+    response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    response.headers['Content-Disposition'] = 'attachment; filename=write_offs_report.xlsx'
+    return response
 
 if __name__ == '__main__':
     app.run(debug=True)

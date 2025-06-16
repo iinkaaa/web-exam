@@ -98,6 +98,9 @@
     <div class="mt-3">
         {% if current_user.is_authenticated and current_user.role.name == 'admin' %}
             <a href="{{ url_for('edit_equipment', id=equipment.id) }}" class="btn btn-warning">Редактировать</a>
+            {% if equipment.status != 'Списано' and current_user.role.name == 'admin' %}
+                <a href="{{ url_for('write_off_equipment', id=equipment.id) }}" class="btn btn-danger">Списать</a>
+            {% endif %}
         {% endif %}
         <a href="{{ url_for('index') }}" class="btn btn-secondary">Назад</a>
     </div>
