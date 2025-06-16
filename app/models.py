@@ -39,6 +39,7 @@ class Equipment(db.Model):
     name = db.Column(db.String(100), nullable=False)
     inventory_number = db.Column(db.String(50), unique=True, nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'), nullable=False)
+    category = db.relationship('Category', backref='equipments')
     purchase_date = db.Column(db.Date, nullable=False)
     cost = db.Column(db.Numeric(10, 2), nullable=False)
     status = db.Column(db.Enum('В эксплуатации', 'На ремонте', 'Списано', name='equipment_status'), nullable=False, default='В эксплуатации')
@@ -47,7 +48,7 @@ class Equipment(db.Model):
     maintenance_history = db.relationship('MaintenanceHistory', backref='equipment', cascade='all, delete-orphan')
     responsible_persons = db.relationship('ResponsiblePersons', secondary=equipment_responsible, back_populates='equipments')
     write_offs = db.relationship('WriteOff', backref='equipment_obj', cascade='all, delete-orphan')
-    
+
 class Photo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(100), nullable=False)
