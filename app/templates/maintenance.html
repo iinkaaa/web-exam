@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Добавление записи об обслуживании{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Добавление записи об обслуживании</h2>
+    
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="mb-4">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="equipment" class="form-label">Выберите оборудование</label>
+                        <select class="form-select" id="equipment" name="id" required>
+                            <option value="">Выберите оборудование</option>
+                            {% for eq in equipment_list %}
+                                <option value="{{ eq.id }}" {% if equipment and equipment.id == eq.id %}selected{% endif %}>
+                                    {{ eq.name }} ({{ eq.inventory_number }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary">Выбрать</button>
+                    </div>
+                </div>
+            </form>
+
+            {% if equipment %}
+                <div class="card">
+                    <div class="card-body">
+                        <h4 class="card-title">{{ equipment.name }}</h4>
+                        <p><strong>Инвентарный номер:</strong> {{ equipment.inventory_number }}</p>
+                        <p><strong>Категория:</strong> {{ equipment.category.name }}</p>
+                        <p><strong>Статус:</strong> {{ equipment.status }}</p>
+                        <p><strong>Примечание:</strong> {{ equipment.note or 'Нет' }}</p>
+                    </div>
+                </div>
+
+                <div class="card mt-4">
+                    <div class="card-body">
+                        <form method="POST" action="{{ url_for('add_maintenance', id=equipment.id) }}">
+                            <div class="mb-3">
+                                <label for="maintenance_type" class="form-label">Тип обслуживания</label>
+                                <select class="form-select" id="maintenance_type" name="maintenance_type" required>
+                                    <option value="">Выберите тип обслуживания</option>
+                                    <option value="Плановый осмотр">Плановый осмотр</option>
+                                    <option value="Ремонт">Ремонт</option>
+                                    <option value="Замена комплектующих">Замена комплектующих</option>
+                                    <option value="Профилактика">Профилактика</option>
+                                </select>
+                                {% if errors and errors.maintenance_type %}
+                                    <div class="invalid-feedback d-block">{{ errors.maintenance_type }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="comment" class="form-label">Комментарий</label>
+                                <textarea class="form-control" id="comment" name="comment" rows="3" required></textarea>
+                                {% if errors and errors.comment %}
+                                    <div class="invalid-feedback d-block">{{ errors.comment }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">Добавить запись</button>
+                                <a href="{{ url_for('index') }}" class="btn btn-secondary">Отмена</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %} 

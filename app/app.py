@@ -3,8 +3,10 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
-from models import db, User, Role, Equipment, Category, MaintenanceHistory, ResponsiblePersons, WriteOff
+from models import db, User, Role, Equipment, Category, MaintenanceHistory, ResponsiblePersons, WriteOff, Photo
 import os
+import hashlib
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 application = app
@@ -179,7 +181,6 @@ def logout():
     flash('Вы вышли из системы', 'info')
     return redirect(url_for('index'))
 
-
 @app.route('/users/create', methods=['GET', 'POST'])
 @login_required
 def create_user():
@@ -250,47 +251,159 @@ def create_user():
                          form_data={},
                          errors={})
 
+def allowed_file(filename):
+    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def calculate_md5(file):
+    md5_hash = hashlib.md5()
+    for chunk in iter(lambda: file.read(4096), b""):
+        md5_hash.update(chunk)
+    file.seek(0)
+    return md5_hash.hexdigest()
+
 @app.route('/equipment/<int:id>')
 def view_equipment(id):
     equipment = Equipment.query.get_or_404(id)
+    return render_template('view_equipment.html', equipment=equipment)
 
-    if current_user.role.name != 'admin' and current_user.id != id:
-        flash('Недостаточно прав', 'danger')
-        return redirect(url_for('index'))
-    
-    return render_template('view_user.html', equipment=equipment)
-
-@app.route('/users/<int:id>/edit', methods=['GET', 'POST'])
+@app.route('/equipment/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
-def edit_user(id):
-    user = User.query.get_or_404(id)
-
-    if current_user.role.name != 'admin' and current_user.id != id:
-        flash('Недостаточно прав', 'danger')
+def edit_equipment(id):
+    if not current_user.role.name == 'admin':
+        flash('У вас недостаточно прав для выполнения данного действия', 'danger')
         return redirect(url_for('index'))
-    
+
+    equipment = Equipment.query.get_or_404(id)
+    categories = Category.query.all()
+
     if request.method == 'POST':
-        user.last_name = request.form.get('last_name')
-        user.first_name = request.form.get('first_name')
-        user.middle_name = request.form.get('middle_name')
+        form_data = {
+            'name': request.form.get('name', '').strip(),
+            'inventory_number': request.form.get('inventory_number', '').strip(),
+            'category_id': request.form.get('category_id'),
+            'purchase_date': request.form.get('purchase_date'),
+            'cost': request.form.get('cost'),
+            'status': request.form.get('status'),
+            'note': request.form.get('note', '').strip()
+        }
 
-        if current_user.role.name == 'admin':
-            user.role_id = request.form.get('role_id')
+        errors = {}
 
-        if not user.first_name:
-            flash('Имя обязательно для заполнения', 'danger')
-            return redirect(url_for('edit_user', id=id))
+        if not form_data['name']:
+            errors['name'] = 'Название обязательно'
+        
+        if not form_data['inventory_number']:
+            errors['inventory_number'] = 'Инвентарный номер обязателен'
+        else:
+            # Проверка уникальности инвентарного номера
+            existing = Equipment.query.filter(
+                Equipment.inventory_number == form_data['inventory_number'],
+                Equipment.id != id
+            ).first()
+            if existing:
+                errors['inventory_number'] = 'Инвентарный номер уже используется'
+
+        if not form_data['category_id']:
+            errors['category_id'] = 'Выберите категорию'
+
+        if not form_data['purchase_date']:
+            errors['purchase_date'] = 'Дата покупки обязательна'
+        else:
+            try:
+                purchase_date = datetime.strptime(form_data['purchase_date'], '%Y-%m-%d').date()
+            except ValueError:
+                errors['purchase_date'] = 'Неверный формат даты'
+
+        if not form_data['cost']:
+            errors['cost'] = 'Стоимость обязательна'
+        else:
+            try:
+                cost = float(form_data['cost'])
+                if cost < 0:
+                    errors['cost'] = 'Стоимость не может быть отрицательной'
+            except ValueError:
+                errors['cost'] = 'Неверный формат стоимости'
+
+        if not form_data['status']:
+            errors['status'] = 'Выберите статус'
+
+        # Обработка фотографии
+        photo = request.files.get('photo')
+        if photo and photo.filename:
+            if not allowed_file(photo.filename):
+                errors['photo'] = 'Недопустимый формат файла'
+            else:
+                # Проверка MD5-хэша
+                md5_hash = calculate_md5(photo)
+                existing_photo = Photo.query.filter_by(md5_hash=md5_hash).first()
+                
+                if existing_photo:
+                    # Проверяем, не используется ли фото другим оборудованием
+                    other_equipment = Equipment.query.join(Equipment.photos).filter(
+                        Photo.id == existing_photo.id,
+                        Equipment.id != id
+                    ).first()
+                    
+                    if other_equipment:
+                        errors['photo'] = 'Это фото уже используется другим оборудованием'
+                    else:
+                        # Используем существующую фотографию
+                        equipment.photos = [existing_photo]
+                else:
+                    # Сохраняем новую фотографию
+                    filename = secure_filename(photo.filename)
+                    photo_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    
+                    # Проверяем, не существует ли файл с таким именем
+                    if os.path.exists(photo_path):
+                        base, ext = os.path.splitext(filename)
+                        filename = f"{base}_{int(datetime.now().timestamp())}{ext}"
+                        photo_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    
+                    photo.save(photo_path)
+                    
+                    new_photo = Photo(
+                        filename=filename,
+                        mime_type=photo.content_type,
+                        md5_hash=md5_hash,
+                        equipment_id=equipment.id
+                    )
+                    db.session.add(new_photo)
+
+        if errors:
+            return render_template('edit_equipment.html',
+                                equipment=equipment,
+                                categories=categories,
+                                form_data=form_data,
+                                errors=errors)
 
         try:
+            # Обновление данных оборудования
+            equipment.name = form_data['name']
+            equipment.inventory_number = form_data['inventory_number']
+            equipment.category_id = int(form_data['category_id'])
+            equipment.purchase_date = datetime.strptime(form_data['purchase_date'], '%Y-%m-%d').date()
+            equipment.cost = float(form_data['cost'])
+            equipment.status = form_data['status']
+            equipment.note = form_data['note']
+
             db.session.commit()
-            flash('Данные пользователя обновлены!', 'success')
-            return redirect(url_for('index'))
+            flash('Оборудование успешно обновлено', 'success')
+            return redirect(url_for('view_equipment', id=equipment.id))
+
         except Exception as e:
             db.session.rollback()
-            flash(f'Ошибка при обновлении: {str(e)}', 'danger')
+            flash(f'Ошибка при сохранении данных: {str(e)}', 'danger')
+            return render_template('edit_equipment.html',
+                                equipment=equipment,
+                                categories=categories,
+                                form_data=form_data,
+                                errors={})
 
-    roles = Role.query.all()
-    return render_template('edit_user.html', user=user, roles=roles)
+    return render_template('edit_equipment.html',
+                         equipment=equipment,
+                         categories=categories)
 
 @app.route('/equipment/<int:id>/delete', methods=['POST'])
 @login_required
@@ -331,28 +444,65 @@ def validate_password(password):
         return "Пароль не должен содержать пробелов"
     return None
 
-@app.route('/change_password', methods=['GET', 'POST'])
+
+@app.route('/equipment/<int:id>/maintenance', methods=['POST'])
 @login_required
-def change_password():
-    if request.method == 'POST':
-        old_password = request.form.get('old_password')
-        new_password = request.form.get('new_password')
-        confirm_password = request.form.get('confirm_password')
-        
-        if not check_password_hash(current_user.password_hash, old_password):
-            flash('Неверный старый пароль', 'danger')
-        elif new_password != confirm_password:
-            flash('Пароли не совпадают', 'danger')
-        else:
-            error = validate_password(new_password)
-            if error:
-                flash(error, 'danger')
-            else:
-                current_user.password_hash = generate_password_hash(new_password)
-                db.session.commit()
-                flash('Пароль успешно изменён!', 'success')
-                return redirect(url_for('index'))
-    return render_template('change_password.html')
+def add_maintenance(id):
+    if not current_user.role.name == 'tech':
+        flash('У вас недостаточно прав для выполнения данного действия', 'danger')
+        return redirect(url_for('index'))
+
+    equipment = Equipment.query.get_or_404(id)
+    
+    form_data = {
+        'maintenance_type': request.form.get('maintenance_type', '').strip(),
+        'comment': request.form.get('comment', '').strip()
+    }
+
+    errors = {}
+
+    if not form_data['maintenance_type']:
+        errors['maintenance_type'] = 'Выберите тип обслуживания'
+
+    if not form_data['comment']:
+        errors['comment'] = 'Введите комментарий'
+
+    if errors:
+        return render_template('view_equipment.html',
+                            equipment=equipment,
+                            form_data=form_data,
+                            errors=errors)
+
+    try:
+        maintenance = MaintenanceHistory(
+            equipment_id=equipment.id,
+            maintenance_type=form_data['maintenance_type'],
+            comment=form_data['comment'],
+            date=datetime.utcnow().date()
+        )
+        db.session.add(maintenance)
+        db.session.commit()
+        flash('Запись об обслуживании успешно добавлена', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Ошибка при добавлении записи: {str(e)}', 'danger')
+
+    return redirect(url_for('view_equipment', id=equipment.id))
+
+@app.route('/maintenance', methods=['GET'])
+@login_required
+def maintenance():
+    if current_user.role.name != 'tech':
+        flash('У вас нет прав для добавления записей об обслуживании', 'danger')
+        return redirect(url_for('index'))
+    
+    equipment_list = Equipment.query.all()
+    equipment_id = request.args.get('id', type=int)
+    equipment = Equipment.query.get(equipment_id) if equipment_id else None
+    
+    return render_template('maintenance.html', 
+                         equipment_list=equipment_list,
+                         equipment=equipment)
 
 
 

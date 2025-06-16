@@ -3,7 +3,7 @@
 {% block title %}Главная — Учёт офисного оборудования{% endblock %}
 
 {% block content %}
-<h1>Список оборудования</h1>
+<h2>Список оборудования</h2>
 
 <form method="get" action="">
     <label>Категория:
@@ -48,11 +48,11 @@
             <td>
                 <a href="{{ url_for('view_equipment', id=eq.id) }}" class="btn btn-info">Просмотр</a>
                 {% if current_user.is_authenticated and current_user.role.name == 'admin' %}
-                    <a href="#" class="btn btn-warning">Редактировать</a>
+                    <a href="{{ url_for('edit_equipment', id=eq.id) }}" class="btn btn-warning">Редактировать</a>
                     <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ eq.id }}">Удалить</button>
                     
                 {% elif current_user.is_authenticated and current_user.role.name == 'tech' %}
-                    <a href="#">➕ Обслуживание</a>
+                    <a href="{{ url_for('maintenance', id=eq.id) }}" class="btn btn-danger">Добавить запись</a>
                 {% endif %}
             </td>
         </tr>
@@ -69,6 +69,47 @@
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Нет</button>
                         <form action="{{ url_for('delete_equipment', id=eq.id) }}" method="POST">
                             <button type="submit" class="btn btn-danger">Да</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Модальное окно для обслуживания -->
+        <div class="modal fade" id="maintenanceModal{{ eq.id }}" tabindex="-1" aria-labelledby="maintenanceModalLabel{{ eq.id }}" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="maintenanceModalLabel{{ eq.id }}">Добавить запись об обслуживании</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form method="POST" action="{{ url_for('add_maintenance', id=eq.id) }}">
+                            <div class="mb-3">
+                                <label for="maintenance_type{{ eq.id }}" class="form-label">Тип обслуживания</label>
+                                <select class="form-select" id="maintenance_type{{ eq.id }}" name="maintenance_type" required>
+                                    <option value="">Выберите тип обслуживания</option>
+                                    <option value="Плановый осмотр">Плановый осмотр</option>
+                                    <option value="Ремонт">Ремонт</option>
+                                    <option value="Замена комплектующих">Замена комплектующих</option>
+                                    <option value="Профилактика">Профилактика</option>
+                                </select>
+                                {% if errors and errors.maintenance_type %}
+                                    <div class="invalid-feedback d-block">{{ errors.maintenance_type }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="comment{{ eq.id }}" class="form-label">Комментарий</label>
+                                <textarea class="form-control" id="comment{{ eq.id }}" name="comment" rows="3" required></textarea>
+                                {% if errors and errors.comment %}
+                                    <div class="invalid-feedback d-block">{{ errors.comment }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                                <button type="submit" class="btn btn-primary">Добавить запись</button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -95,9 +136,5 @@
         {% endfor %}
     {% endif %}
 </div>
-
-
-
-
 
 {% endblock %}
