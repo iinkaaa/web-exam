@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4">Статистика посещений по пользователям</h2>
+    
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead class="table-dark">
+                <tr>
+                    <th>№</th>
+                    <th>Пользователь</th>
+                    <th>Количество посещений</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for stat in stats %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>
+                        {% if stat.last_name %}
+                            {{ stat.last_name }} {{ stat.first_name }}
+                        {% else %}
+                            Неаутентифицированные пользователи
+                        {% endif %}
+                    </td>
+                    <td>{{ stat.count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <a href="{{ url_for('reports.users_stats', export='csv') }}" class="btn btn-success mt-3">
+        <i class="bi bi-download"></i> Экспорт в CSV
+    </a>
+    <a href="{{ url_for('reports.visits') }}" class="btn btn-secondary mt-3 ms-2">
+        <i class="bi bi-arrow-left"></i> Назад к журналу
+    </a>
+</div>
+{% endblock %}

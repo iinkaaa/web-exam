@@ -1,0 +1,15 @@
+body {
+    font-size: 1.25rem;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    height: 100vh;
+    margin: 0;
+}
+
+.avatar {
+    max-width: 100%;
+}
+
+.post-img {
+    max-width: 80%;
+}

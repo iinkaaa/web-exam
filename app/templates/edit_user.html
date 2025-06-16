@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% from "_macros.html" import render_user_form %}
+
+{% block content %}
+<h2>Редактирование пользователя</h2>
+<form method="POST">
+    {{ render_user_form(user, roles, is_edit=True, current_user=current_user) }}
+</form>
+{% endblock %}

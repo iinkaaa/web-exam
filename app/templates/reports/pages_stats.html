@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4">Статистика посещений по страницам</h2>
+    
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead class="table-dark">
+                <tr>
+                    <th>№</th>
+                    <th>Страница</th>
+                    <th>Количество посещений</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for stat in stats %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ stat.path }}</td>
+                    <td>{{ stat.count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <a href="{{ url_for('reports.pages_stats', export='csv') }}" class="btn btn-success mt-3">
+        <i class="bi bi-download"></i> Экспорт в CSV
+    </a>
+    <a href="{{ url_for('reports.visits') }}" class="btn btn-secondary mt-3 ms-2">
+        <i class="bi bi-arrow-left"></i> Назад к журналу
+    </a>
+</div>
+{% endblock %}

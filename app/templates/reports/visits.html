@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Журнал посещений</h2>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>№</th>
+            <th>Пользователь</th>
+            <th>Страница</th>
+            <th>Дата</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for visit in visits.items %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>
+                {% if visit.user %}
+                    {{ visit.user.last_name }} {{ visit.user.first_name }}
+                {% else %}
+                    Неаутентифицированный пользователь
+                {% endif %}
+            </td>
+            <td>{{ visit.path }}</td>
+            <td>{{ visit.created_at.strftime('%d.%m.%Y %H:%M:%S') }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<nav>
+    <ul class="pagination">
+        {% if visits.has_prev %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ visits.prev_num }}">Назад</a>
+        </li>
+        {% endif %}
+        {% if visits.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ visits.next_num }}">Вперёд</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+
+{% if current_user.role.name == 'admin' %}
+<div class="mt-4">
+    <a href="{{ url_for('reports.pages_stats') }}" class="btn btn-info">Статистика по страницам</a>
+    <a href="{{ url_for('reports.users_stats') }}" class="btn btn-info">Статистика по пользователям</a>
+</div>
+{% endif %}
+{% endblock %}
